@@ -6,11 +6,13 @@ DB_PATH = os.path.join("bot", "database", "healthbot.db")
 
 async def init_db():
     """Initialize database and tables if not exist."""
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     async with aiosqlite.connect(DB_PATH) as db:
-        # Users
+        # Users (added gender)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY,
+                gender TEXT,
                 created_at TEXT
             )
         """)
@@ -50,23 +52,42 @@ async def init_db():
             )
         """)
 
+        # Weight Logs
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS weight_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                weight REAL NOT NULL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(user_id) REFERENCES users(user_id)
+            )
+        """)
+
         await db.commit()
 
 
 # ----------------- Helper Functions ----------------- #
 
-async def ensure_user(user_id: int):
-    """Ensure user exists in users table."""
+async def ensure_user(user_id: int, gender: str = None):
+    """Ensure user exists in users table, optionally set gender."""
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute("SELECT 1 FROM users WHERE user_id = ?", (user_id,))
         exists = await cursor.fetchone()
         if not exists:
             await db.execute(
-                "INSERT INTO users (user_id, created_at) VALUES (?, ?)",
-                (user_id, datetime.utcnow().isoformat())
+                "INSERT INTO users (user_id, gender, created_at) VALUES (?, ?, ?)",
+                (user_id, gender, datetime.utcnow().isoformat())
+            )
+            await db.commit()
+        elif gender:  # Update gender if provided
+            await db.execute(
+                "UPDATE users SET gender = ? WHERE user_id = ?",
+                (gender, user_id)
             )
             await db.commit()
 
+
+# ----------------- BMI, Hydration, Stress, Weight Logging ----------------- #
 
 async def log_bmi(user_id: int, weight: float, height: float, bmi: float):
     await ensure_user(user_id)
@@ -97,6 +118,28 @@ async def log_stress(user_id: int, score: int):
         )
         await db.commit()
 
+
+async def log_weight(user_id: int, weight: float):
+    await ensure_user(user_id)
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO weight_logs (user_id, weight) VALUES (?, ?)",
+            (user_id, weight)
+        )
+        await db.commit()
+
+
+async def get_user_weights(user_id: int, limit: int = 10):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT weight, timestamp FROM weight_logs WHERE user_id = ? ORDER BY timestamp DESC LIMIT ?",
+            (user_id, limit)
+        )
+        rows = await cursor.fetchall()
+        return rows[::-1]
+
+
+# ----------------- Fetch History ----------------- #
 
 async def fetch_bmi_history(user_id: int, limit: int = 10):
     async with aiosqlite.connect(DB_PATH) as db:
