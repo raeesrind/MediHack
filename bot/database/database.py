@@ -35,11 +35,15 @@ async def init_db():
             CREATE TABLE IF NOT EXISTS hydration_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
+                weight REAL,
+                climate TEXT,
+                activity TEXT,
                 water_liters REAL,
                 logged_at TEXT,
                 FOREIGN KEY(user_id) REFERENCES users(user_id)
             )
         """)
+
 
         # Stress Logs
         await db.execute("""
@@ -99,12 +103,15 @@ async def log_bmi(user_id: int, weight: float, height: float, bmi: float):
         await db.commit()
 
 
-async def log_hydration(user_id: int, liters: float):
+async def log_hydration(user_id: int, weight: float, climate: str, activity: str, water_liters: float):
     await ensure_user(user_id)
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
-            "INSERT INTO hydration_logs (user_id, water_liters, logged_at) VALUES (?, ?, ?)",
-            (user_id, liters, datetime.utcnow().isoformat())
+            """
+            INSERT INTO hydration_logs (user_id, weight, climate, activity, water_liters, logged_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (user_id, weight, climate, activity, water_liters, datetime.utcnow().isoformat())
         )
         await db.commit()
 

@@ -19,3 +19,7 @@ config/.env
 
 # Logs
 *.log
+
+# db files
+*.db
+

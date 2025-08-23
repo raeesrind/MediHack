@@ -8,6 +8,9 @@ from bot.core.loader import load_cogs
 import aiosqlite
 import asyncio
 
+# Import healthbot database module
+from bot.database import database
+
 load_dotenv(dotenv_path="config/.env")
 
 intents = discord.Intents.all()
@@ -78,7 +81,7 @@ async def on_ready():
 
 # ---------------- Main ----------------
 async def main():
-    # ✅ Initialize DB tables if not exist
+    # ✅ Initialize medi.db settings table
     async with aiosqlite.connect(DATABASE) as db:
         await db.execute("""
         CREATE TABLE IF NOT EXISTS settings (
@@ -88,6 +91,9 @@ async def main():
         )
         """)
         await db.commit()
+
+    # ✅ Initialize healthbot.db tables (users, hydration, BMI, stress, weight)
+    await database.init_db()
 
     await load_cogs(bot)
 
